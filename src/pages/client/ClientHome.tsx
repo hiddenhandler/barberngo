@@ -3,12 +3,12 @@ import { CalendarCheck, Heart, RotateCcw, CalendarPlus, Star } from 'lucide-reac
 import { useAuth } from '@/lib/auth'
 import { relativeDay, time, money } from '@/lib/format'
 import { useFirstAvailable } from '../public/shared'
-import { Avatar, Badge, Button, Card, EmptyState, Skeleton } from '@/components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui'
 import { isUpcoming, useMyAppointments, useMyFavorites, type MyAppointment } from './data'
 
 export default function ClientHome() {
   const { user } = useAuth()
-  const { data: appts, isLoading } = useMyAppointments()
+  const { data: appts, isLoading, error, refetch } = useMyAppointments()
   const { data: favs } = useMyFavorites()
   const next = appts?.filter(isUpcoming).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0]
   const last = appts?.find((a) => a.status === 'COMPLETED')
@@ -18,7 +18,7 @@ export default function ClientHome() {
   return (
     <div className="space-y-5">
       <h1 className="display text-[40px] leading-none">Hey{name ? ` ${name}` : ''} 👋</h1>
-      {isLoading ? <Skeleton className="h-40" /> : next ? (
+      {isLoading ? <Skeleton className="h-40" /> : error ? <ErrorState error={error} retry={refetch} /> : next ? (
         <Card className="animate-rise overflow-hidden">
           <div className="h-1.5" style={{ background: next.accent_color }} />
           <div className="p-5">
@@ -36,7 +36,7 @@ export default function ClientHome() {
       ) : last ? (
         <BookAgain a={last} />
       ) : (
-        <Card><EmptyState icon={<CalendarPlus className="size-6" />} title="No appointments yet" body="Book from your barbershop's page — it'll show up here." /></Card>
+        <Card><EmptyState icon={<CalendarPlus className="size-6" />} action={<Link to="/me/book" className="font-semibold text-accent underline underline-offset-4">Book a cut</Link>} title="No appointments yet" body="Book from your barbershop's page — it'll show up here." /></Card>
       )}
 
       {next && last && <BookAgain a={last} compact />}

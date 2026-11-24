@@ -28,13 +28,13 @@ export default function ClientShell() {
       <main className="mx-auto max-w-xl px-4 pb-28 pt-5">
         <Outlet />
       </main>
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/92 backdrop-blur-md">
+      <nav aria-label="Customer navigation" className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/92 backdrop-blur-md">
         <div className="mx-auto grid max-w-xl grid-cols-5">
           {ITEMS.map((i) => (
             <NavLink key={i.to} to={i.to} end={i.end}
-              className={({ isActive }) => cx('flex flex-col items-center gap-1 pb-2 pt-2.5 text-[10.5px] font-semibold tracking-wide', isActive ? 'text-accent' : 'text-muted')}>
+              className={({ isActive }) => cx('flex flex-col items-center gap-1 pb-2 pt-2.5 min-h-14 text-[11px] font-semibold sm:text-xs', isActive ? 'text-accent' : 'text-muted')}>
               <i.icon className="size-[22px]" />
-              {i.label.toUpperCase()}
+              {i.label}
             </NavLink>
           ))}
         </div>

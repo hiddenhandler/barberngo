@@ -1,17 +1,19 @@
-import { Navigate } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { QrCode } from 'lucide-react'
-import { Card, EmptyState, Spinner } from '@/components/ui'
+import { Card, EmptyState, ErrorState, Spinner } from '@/components/ui'
 import { useMyAppointments } from './data'
 
 /** "Shop" tab: straight to the customer's barbershop (the one they visit). Never a directory of shops. */
 export default function ClientShop() {
-  const { data: appts, isLoading } = useMyAppointments()
+  const { data: appts, isLoading, error, refetch } = useMyAppointments()
   if (isLoading) return <div className="flex justify-center py-16"><Spinner /></div>
+  if (error) return <ErrorState error={error} retry={refetch} />
   const last = [...(appts ?? [])].sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0]
   if (last) return <Navigate to={`/shop/${last.shop_slug}`} replace />
   return (
     <Card>
       <EmptyState icon={<QrCode className="size-6" />} title="Scan your barbershop's QR code"
+        action={<Link to="/me/book" className="font-semibold text-accent underline underline-offset-4">Enter a shop link or code</Link>}
         body="Your shop's page opens with its barbers, live availability and booking. After your first visit it lives right here." />
     </Card>
   )

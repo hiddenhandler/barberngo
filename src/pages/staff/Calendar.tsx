@@ -34,7 +34,7 @@ export default function Calendar() {
   const [view, setView] = useState<'day' | 'week'>(() => (allCalendar ? 'day' : 'week'))
   const [focusBarber, setFocusBarber] = useState<string | null>(allCalendar ? null : ws.barber_id)
   const [selected, setSelected] = useState<Appointment | null>(null)
-  const [newAt, setNewAt] = useState<{ barberId?: string; date?: string; time?: string } | null>(params.get('new') ? {} : null)
+  const [newAt, setNewAt] = useState<{ barberId?: string; date?: string; time?: string } | null>(null)
   const [blockAt, setBlockAt] = useState<{ barberId?: string; date?: string; time?: string } | null>(null)
 
   const effectiveView = view === 'week' && (focusBarber || barbers.length === 1) ? 'week' : 'day'
@@ -123,7 +123,14 @@ export default function Calendar() {
       )}
 
       <AppointmentSheet appt={selected} onClose={() => setSelected(null)} />
-      <NewAppointmentSheet open={!!newAt} onClose={() => setNewAt(null)} defaults={newAt ?? undefined} />
+      <NewAppointmentSheet open={!!newAt || params.has('new')} onClose={() => {
+        setNewAt(null)
+        if (params.has('new')) {
+          const next = new URLSearchParams(params)
+          next.delete('new')
+          setParams(next, { replace: true })
+        }
+      }} defaults={newAt ?? undefined} />
       <BlockTimeSheet open={!!blockAt} onClose={() => setBlockAt(null)} defaults={blockAt ?? undefined} />
     </div>
   )
