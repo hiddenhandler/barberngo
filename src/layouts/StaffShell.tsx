@@ -30,7 +30,7 @@ interface NavItem {
 // SHOP → CHAIRS → BARBERS → CUSTOMERS → APPOINTMENTS → PAYMENTS → ANALYTICS
 const NAV: { group: string; items: NavItem[] }[] = [
   {
-    group: 'Operations',
+    group: 'Front desk',
     items: [
       { to: '/app/dashboard', label: 'Overview', icon: Gauge, perm: 'reports.shop' },
       { to: '/app/today', label: 'Today', icon: Timer, barber: true },
@@ -46,7 +46,13 @@ const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       { to: '/app/barbers', label: 'Barbers', icon: Contact, perm: 'staff.manage' },
       { to: '/app/clients', label: 'Customers', icon: Users },
+    ],
+  },
+  {
+    group: 'Shop operations',
+    items: [
       { to: '/app/services', label: 'Services & prices', icon: Tags, perm: 'services.manage' },
+      { to: '/app/inventory', label: 'Inventory', icon: Package },
     ],
   },
   {
@@ -54,12 +60,11 @@ const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       { to: '/app/finance', label: 'Finance', icon: Landmark, perm: 'finance.manage' },
       { to: '/app/finance', label: 'My money', icon: Wallet, barber: true, notPerm: 'finance.manage' },
-      { to: '/app/inventory', label: 'Inventory', icon: Package },
       { to: '/app/payments', label: 'Payments', icon: CreditCard, perm: 'payments.view' },
     ],
   },
   {
-    group: 'Grow',
+    group: 'Reports & growth',
     items: [
       { to: '/app/reports', label: 'Analytics', icon: BarChart3, perm: 'reports.shop' },
       { to: '/app/insights', label: 'Insights & AI', icon: Sparkles, perm: 'reports.shop' },
@@ -102,7 +107,9 @@ function useNavItems() {
 }
 
 function Shell() {
-  const { ws, isBarberOnly } = useWorkspace()
+  const { ws, can } = useWorkspace()
+  const groups = useNavItems()
+  const destinations = groups.flatMap((group) => group.items)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const loc = useLocation()
@@ -124,7 +131,7 @@ function Shell() {
     <div className="min-h-dvh lg:flex">
       {/* Desktop sidebar (hidden for barber-only on mobile-first experience but available on desktop) */}
       <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
-        <SidebarContent onSearch={() => setPaletteOpen(true)} />
+        <SidebarContent groups={groups} onSearch={() => setPaletteOpen(true)} />
       </aside>
 
       {/* Mobile top bar */}
@@ -151,7 +158,7 @@ function Shell() {
                 <X className="size-5" />
               </IconButton>
             </div>
-            <SidebarContent onSearch={() => setPaletteOpen(true)} />
+            <SidebarContent groups={groups} onSearch={() => setPaletteOpen(true)} />
           </div>
         </div>
       )}
@@ -162,14 +169,13 @@ function Shell() {
         </div>
       </main>
 
-      <BottomNav barber={isBarberOnly || !!ws.barber_id} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <BottomNav barber={!!ws.barber_id && !can('reports.shop')} destinations={destinations} />
+      <CommandPalette destinations={destinations} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   )
 }
 
-function SidebarContent({ onSearch }: { onSearch: () => void }) {
-  const groups = useNavItems()
+function SidebarContent({ groups, onSearch }: { groups: typeof NAV; onSearch: () => void }) {
   const { ws, all, switchTo } = useWorkspace()
   const { user, signOut } = useAuth()
   const { data: isSystemOwner } = useQuery({ queryKey: ['am_platform_admin', user?.id], enabled: !!user, staleTime: 5 * 60_000, queryFn: () => rpc<boolean>('am_platform_admin') })
@@ -183,6 +189,7 @@ function SidebarContent({ onSearch }: { onSearch: () => void }) {
         </Link>
         <div className="relative">
           <button
+            aria-expanded={switcher}
             onClick={() => setSwitcher((s) => !s)}
             className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-surface-2/60 px-3 py-2.5 text-left transition hover:bg-surface-2"
           >
@@ -253,7 +260,7 @@ function SidebarContent({ onSearch }: { onSearch: () => void }) {
             {(['light', 'system', 'dark'] as ThemePref[]).map((t) => {
               const Icon = t === 'light' ? Sun : t === 'dark' ? Moon : Monitor
               return (
-                <button key={t} aria-label={`${t} theme`} onClick={() => { setThemePref(t); setTheme(t) }}
+                <button key={t} aria-pressed={theme === t} aria-label={`${t} theme`} onClick={() => { setThemePref(t); setTheme(t) }}
                   className={cx('rounded-md p-1.5', theme === t ? 'bg-surface text-ink shadow-sm' : 'text-muted')}>
                   <Icon className="size-3.5" />
                 </button>
@@ -311,33 +318,23 @@ function NotificationsBell() {
   )
 }
 
-function BottomNav({ barber }: { barber: boolean }) {
-  const { can, hasFeature } = useWorkspace()
-  // Barber: Today · Queue · Schedule · Customers · Earnings
-  // Owner:  Overview · Appointments · Chairs · Customers · Finance
-  const items: NavItem[] = barber && !can('reports.shop')
-    ? [
-        { to: '/app/today', label: 'Today', icon: Timer },
-        ...(hasFeature('walk_ins') ? [{ to: '/app/walk-ins', label: 'Queue', icon: DoorOpen }] : []),
-        { to: '/app/calendar', label: 'Schedule', icon: CalendarDays },
-        { to: '/app/clients', label: 'Customers', icon: Users },
-        { to: '/app/finance', label: 'Earnings', icon: Wallet },
-      ]
-    : [
-        { to: '/app', label: 'Overview', icon: Home, end: true },
-        { to: '/app/calendar', label: 'Appointments', icon: CalendarDays },
-        { to: '/app/chairs', label: 'Chairs', icon: BarberChairIcon },
-        { to: '/app/clients', label: 'Customers', icon: Users },
-        ...(can('finance.manage') ? [{ to: '/app/finance', label: 'Finance', icon: Landmark }] : can('reports.shop') ? [{ to: '/app/reports', label: 'Analytics', icon: BarChart3 }] : [{ to: '/app/payments', label: 'Payments', icon: CreditCard }]),
-      ]
+function BottomNav({ barber, destinations }: { barber: boolean; destinations: NavItem[] }) {
+  const paths = barber
+    ? ['today', 'walk-ins', 'calendar', 'clients', 'finance']
+    : ['calendar', 'chairs', 'clients', 'finance', 'reports', 'payments']
+  const items: NavItem[] = barber ? [] : [{ to: '/app', label: 'Home', icon: Home, end: true }]
+  for (const path of paths) {
+    const item = destinations.find((destination) => destination.to === `/app/${path}`)
+    if (item && items.length < 5) items.push(item)
+  }
   return (
     <nav className="no-print safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/92 backdrop-blur-md lg:hidden">
       <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>
         {items.map((i) => (
           <NavLink key={i.to} to={i.to} end={i.end}
-            className={({ isActive }) => cx('flex flex-col items-center gap-1 pb-2 pt-2.5 text-[10.5px] font-semibold tracking-wide', isActive ? 'text-accent' : 'text-muted')}>
+            className={({ isActive }) => cx('flex flex-col items-center gap-1 pb-2 pt-2.5 text-xs font-semibold', isActive ? 'text-accent' : 'text-muted')}>
             <i.icon className="size-[22px]" />
-            {i.label.toUpperCase()}
+            {i.to === '/app/walk-ins' ? 'Queue' : i.label}
           </NavLink>
         ))}
       </div>

@@ -31,7 +31,7 @@ export default function WalkIns() {
   const qc = useQueryClient()
   const toast = useToast()
   const [params, setParams] = useSearchParams()
-  const [adding, setAdding] = useState(params.get('add') === '1')
+  const [adding, setAdding] = useState(false)
   const { data: barbers } = useBarbers(ws.shop_id)
   const { data: queue, isLoading } = useQuery({
     queryKey: ['walk_ins', ws.shop_id, 'queue'],
@@ -107,7 +107,14 @@ export default function WalkIns() {
           </div>
         </div>
       )}
-      <AddWalkIn open={adding} onClose={() => { setAdding(false); params.delete('add'); setParams(params) }} onAdded={refresh} />
+      <AddWalkIn open={adding || params.get('add') === '1'} onClose={() => {
+        setAdding(false)
+        if (params.has('add')) {
+          const next = new URLSearchParams(params)
+          next.delete('add')
+          setParams(next, { replace: true })
+        }
+      }} onAdded={refresh} />
     </div>
   )
 }

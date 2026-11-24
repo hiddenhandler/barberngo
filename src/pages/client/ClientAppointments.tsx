@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { CalendarX } from 'lucide-react'
 import { dateLabel, money, relativeDay, time } from '@/lib/format'
-import { Avatar, Card, EmptyState, Segmented, Skeleton, StatusBadge } from '@/components/ui'
+import { Avatar, Card, EmptyState, ErrorState, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { isUpcoming, useMyAppointments } from './data'
 
 export default function ClientAppointments() {
-  const { data, isLoading } = useMyAppointments()
+  const { data, isLoading, error, refetch } = useMyAppointments()
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
   const list = (data ?? []).filter((a) => (tab === 'upcoming' ? isUpcoming(a) : !isUpcoming(a)))
   if (tab === 'upcoming') list.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
@@ -14,8 +14,8 @@ export default function ClientAppointments() {
     <div className="space-y-5">
       <h1 className="display text-[40px] leading-none">Appointments</h1>
       <Segmented value={tab} onChange={setTab} options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'History' }]} />
-      {isLoading ? <Skeleton className="h-40" /> : !list.length ? (
-        <Card><EmptyState icon={<CalendarX className="size-6" />} title={tab === 'upcoming' ? 'Nothing booked' : 'No history yet'} /></Card>
+      {isLoading ? <Skeleton className="h-40" /> : error ? <ErrorState error={error} retry={refetch} /> : !list.length ? (
+        <Card><EmptyState icon={<CalendarX className="size-6" />} action={tab === 'upcoming' && <Link to="/me/book" className="font-semibold text-accent underline underline-offset-4">Book a cut</Link>} title={tab === 'upcoming' ? 'Nothing booked' : 'No history yet'} /></Card>
       ) : (
         <Card className="divide-y divide-line">
           {list.map((a) => (

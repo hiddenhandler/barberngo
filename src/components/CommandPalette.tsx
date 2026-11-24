@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -18,12 +18,13 @@ interface Result {
 
 const ICONS = { client: User, barber: Contact, service: Layers, appointment: CalendarDays, payment: CreditCard, action: ArrowRight }
 
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { ws, can } = useWorkspace()
+export function CommandPalette({ open, onClose, destinations }: { destinations: { to: string; label: string }[]; open: boolean; onClose: () => void }) {
+  const { ws } = useWorkspace()
   const nav = useNavigate()
   const [q, setQ] = useState('')
   const [debounced, setDebounced] = useState('')
   const [idx, setIdx] = useState(0)
+  const dialog = useRef<HTMLDialogElement>(null)
   const input = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -34,33 +35,33 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (open) {
       setQ('')
       setIdx(0)
-      setTimeout(() => input.current?.focus(), 10)
+      setDebounced('')
+      const element = dialog.current
+      element?.showModal()
+      input.current?.focus()
+      return () => element?.close()
     }
   }, [open])
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError } = useQuery({
     queryKey: ['search', ws.shop_id, debounced],
     enabled: open && debounced.trim().length >= 2,
     queryFn: () => rpc<Result[]>('global_search', { p_shop_id: ws.shop_id, p_query: debounced }),
   })
 
-  const actions: Result[] = useMemo(() => {
-    const all: Result[] = [
-      { type: 'action', id: 'new-appt', title: 'New appointment', to: '/app/calendar?new=1' },
-      { type: 'action', id: 'walkin', title: 'Add walk-in', to: '/app/walk-ins?add=1' },
-      { type: 'action', id: 'calendar', title: 'Open calendar', to: '/app/calendar' },
-      { type: 'action', id: 'chairs', title: 'Chairs — live status', to: '/app/chairs' },
-      { type: 'action', id: 'inventory', title: 'Inventory', to: '/app/inventory' },
-      { type: 'action', id: 'finance', title: can('finance.manage') ? 'Finance' : 'My money', to: '/app/finance' },
-      { type: 'action', id: 'qr', title: 'Booking page & QR code', to: '/app/share' },
-      ...(can('reports.shop') ? [{ type: 'action' as const, id: 'reports', title: 'Analytics', to: '/app/reports' }, { type: 'action' as const, id: 'ask', title: 'Ask the AI assistant', to: '/app/insights' }] : []),
-      ...(can('shop.settings') ? [{ type: 'action' as const, id: 'settings', title: 'Settings', to: '/app/settings' }] : []),
-      { type: 'action', id: 'public', title: 'View public booking page', to: `/shop/${ws.shop_slug}` },
-    ]
-    return all.filter((a) => !q || a.title.toLowerCase().includes(q.toLowerCase()))
-  }, [q, can, ws.shop_slug])
-
-  const results = [...(debounced.trim().length >= 2 ? data ?? [] : []), ...actions]
+  const query = q.trim().toLowerCase()
+  const shortcuts: Result[] = [
+    { type: 'action', id: 'new-appt', title: 'New appointment', to: '/app/calendar?new=1' },
+    ...(destinations.some((item) => item.to === '/app/walk-ins')
+      ? [{ type: 'action' as const, id: 'walkin', title: 'Add walk-in', to: '/app/walk-ins?add=1' }]
+      : []),
+    ...destinations.map(({ to, label }) => ({ type: 'action' as const, id: to, title: label, to })),
+    { type: 'action', id: 'public', title: 'View public booking page', to: `/shop/${ws.shop_slug}` },
+  ]
+  const actions = shortcuts.filter((action) => action.title.toLowerCase().includes(query))
+  const currentQuery = debounced.trim().toLowerCase() === query
+  const results = [...(currentQuery && query.length >= 2 ? data ?? [] : []), ...actions]
+  const searching = query.length >= 2 && (!currentQuery || isFetching)
 
   const go = (r: Result) => {
     onClose()
@@ -81,7 +82,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   if (!open) return null
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 pt-[12vh]" role="dialog" aria-modal="true" aria-label="Search">
+    <dialog ref={dialog} onCancel={(event) => { event.preventDefault(); onClose() }} className="fixed inset-0 m-0 flex h-dvh max-h-none w-full max-w-none items-start justify-center bg-transparent p-4 pt-[12vh] text-ink" aria-label="Search workspace">
       <div className="animate-fade absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
       <div className="animate-rise relative w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="flex items-center gap-3 border-b border-line px-4">
@@ -94,10 +95,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               setIdx(0)
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') onClose()
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
-                setIdx((i) => Math.min(results.length - 1, i + 1))
+                setIdx((i) => Math.max(0, Math.min(results.length - 1, i + 1)))
               }
               if (e.key === 'ArrowUp') {
                 e.preventDefault()
@@ -105,13 +105,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               }
               if (e.key === 'Enter' && results[idx]) go(results[idx])
             }}
-            placeholder="Search clients, phone, barbers, appointments…"
-            className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint"
+            aria-label="Search workspace"
+            placeholder="Search pages, clients, phone, barbers, appointments…"
+            className="h-14 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint"
           />
           {isFetching ? <Spinner className="size-4" /> : <KeyHint>esc</KeyHint>}
         </div>
         <ul className="max-h-[50vh] overflow-y-auto p-2">
-          {results.length === 0 && <li className="px-3 py-8 text-center text-sm text-muted">No matches</li>}
+          {results.length === 0 && <li className="px-3 py-8 text-center text-sm text-muted">{searching ? 'Searching…' : isError && query.length >= 2 ? 'Could not search shop records. Try again.' : 'No matches'}</li>}
           {results.map((r, i) => {
             const Icon = r.type === 'action' && r.id === 'new-appt' ? Plus : ICONS[r.type]
             return (
@@ -135,7 +136,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           })}
         </ul>
       </div>
-    </div>,
+    </dialog>,
     document.body,
   )
 }
